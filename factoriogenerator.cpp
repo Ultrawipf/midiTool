@@ -37,37 +37,10 @@ QJsonObject FactorioGenerator::makeConnections(int cID, QVector<int> red_eIDs,QV
     return conns;
 }
 QJsonObject FactorioGenerator::makeRedConnections(int cID, QVector<int> red_eIDs){
-    QJsonArray redConns;
-
-/*
-    QJsonObject firstConnection{{"entity_id",red_eIDs[0]}};
-    if(cID!=0)
-        firstConnection["circuit_id"]=cID;
-
-    redConns.append(firstConnection);
-*/
-    for(int i=0;i<red_eIDs.length();i++)
-        redConns.append(QJsonObject{{"entity_id",red_eIDs[i]},{"circuit_id",cID}});
-
-    QJsonObject conns;
-    conns["red"]=redConns;
-    return conns;
+    return makeConnections(cID, red_eIDs, QVector<int>{});
 }
 QJsonObject FactorioGenerator::makeGreenConnections(int cID, QVector<int> green_eIDs){
-
-    QJsonArray greenConns;
-    //QJsonObject firstConnection{{"entity_id",green_eIDs[0]}};
-    /*if(cID!=0)
-        firstConnection["circuit_id"]=cID;
-
-    greenConns.append(firstConnection);
-*/
-    for(int i=0;i<green_eIDs.length();i++)
-        greenConns.append(QJsonObject{{"entity_id",green_eIDs[i]},{"circuit_id",cID}});
-
-    QJsonObject conns;
-    conns["green"]=greenConns;
-    return conns;
+    return makeConnections(cID, QVector<int>{}, green_eIDs);
 }
 
 QJsonObject makePos(float x,float y){
