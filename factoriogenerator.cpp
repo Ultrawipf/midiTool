@@ -24,20 +24,12 @@ QJsonObject FactorioGenerator::makeConnection(int cID, int eID){
 }
 
 QJsonObject FactorioGenerator::makeConnections(int cID, QVector<int> red_eIDs,QVector<int> green_eIDs){
-
-
-    QJsonObject firstConnection{{"entity_id",red_eIDs[0]}};
-    if(cID!=0)
-        firstConnection["circuit_id"]=cID;
     QJsonArray redConns;
-    redConns.append(firstConnection);
     QJsonArray greenConns;
-
-    for(int i=1;i<red_eIDs.length();i++)
-        redConns.append(QJsonObject{{"entity_id",red_eIDs[i]}});
-
+    for(int i=0;i<red_eIDs.length();i++)
+        redConns.append(QJsonObject{{"entity_id",red_eIDs[i]},{"circuit_id",cID}});
     for(int i=0;i<green_eIDs.length();i++)
-        greenConns.append(QJsonObject{{"entity_id",green_eIDs[i]}});
+        greenConns.append(QJsonObject{{"entity_id",green_eIDs[i]},{"circuit_id",cID}});
 
     QJsonObject conns;
     conns["red"]=redConns;
@@ -45,16 +37,17 @@ QJsonObject FactorioGenerator::makeConnections(int cID, QVector<int> red_eIDs,QV
     return conns;
 }
 QJsonObject FactorioGenerator::makeRedConnections(int cID, QVector<int> red_eIDs){
+    QJsonArray redConns;
 
-
+/*
     QJsonObject firstConnection{{"entity_id",red_eIDs[0]}};
     if(cID!=0)
         firstConnection["circuit_id"]=cID;
-    QJsonArray redConns;
-    redConns.append(firstConnection);
 
-    for(int i=1;i<red_eIDs.length();i++)
-        redConns.append(QJsonObject{{"entity_id",red_eIDs[i]}});
+    redConns.append(firstConnection);
+*/
+    for(int i=0;i<red_eIDs.length();i++)
+        redConns.append(QJsonObject{{"entity_id",red_eIDs[i]},{"circuit_id",cID}});
 
     QJsonObject conns;
     conns["red"]=redConns;
@@ -62,15 +55,15 @@ QJsonObject FactorioGenerator::makeRedConnections(int cID, QVector<int> red_eIDs
 }
 QJsonObject FactorioGenerator::makeGreenConnections(int cID, QVector<int> green_eIDs){
 
-
-    QJsonObject firstConnection{{"entity_id",green_eIDs[0]}};
-    if(cID!=0)
-        firstConnection["circuit_id"]=cID;
     QJsonArray greenConns;
-    greenConns.append(firstConnection);
+    //QJsonObject firstConnection{{"entity_id",green_eIDs[0]}};
+    /*if(cID!=0)
+        firstConnection["circuit_id"]=cID;
 
-    for(int i=1;i<green_eIDs.length();i++)
-        greenConns.append(QJsonObject{{"entity_id",green_eIDs[i]}});
+    greenConns.append(firstConnection);
+*/
+    for(int i=0;i<green_eIDs.length();i++)
+        greenConns.append(QJsonObject{{"entity_id",green_eIDs[i]},{"circuit_id",cID}});
 
     QJsonObject conns;
     conns["green"]=greenConns;
@@ -146,7 +139,7 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
                 {"name","medium-electric-pole"},
                 {"position",makePos(x,y)},
                 {"entity_number",id},
-                {"connections",QJsonArray{connection}}
+                {"connections",QJsonObject{{"1",connection}}}
             };
             return pole;
         }
@@ -173,7 +166,7 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
                 {"name","small-lamp"},
                 {"position",makePos(x,y)},
                 {"entity_number",id},
-                {"connections",QJsonArray{connection}},
+                {"connections",QJsonObject{{"1",connection}}},
                 {"control_behavior",control}
             };
         }
@@ -240,12 +233,12 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
             this->lastPole=this->id++;
             QJsonObject decider = makeDecider(x+1.5,y,2,decId,"<",val,true,"signal-T","signal-T");
             QJsonObject constant = makeConstant(x,y,2,conId,false,QJsonArray{makeFilter("signal-T",1,1)});
-            QJsonArray connections;
-            connections.append(makeRedConnections(1,QVector<int>{conId,decId}));//input
-            connections.append(makeConnections(1,QVector<int>{decId},QVector<int>{lastPole}));
+            QJsonObject connections{{"1",makeRedConnections(1,QVector<int>{conId,decId})},{"2",makeGreenConnections(1,QVector<int>{decId})}};
+            //connections.append(makeRedConnections(1,QVector<int>{conId,decId}));//input
+            //connections.append(makeGreenConnections(1,QVector<int>{decId}));
             decider["connections"]=connections;
             constant["connections"]=makeRedConnections(1,QVector<int>{decId});
-            QJsonObject pole = makePole(x+3,y,lastPole);
+            QJsonObject pole = makePole(x+3,y,lastPole,makeRedConnections(2,QVector<int>{decId}));
             lastConPoint=lastPole;
 
             entities.append(constant);
@@ -253,21 +246,23 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
             entities.append(pole);
         }
 
-        void FactorioGenerator::generateMemCell(float x, float y,int adr,QString signal,int value){
+        int FactorioGenerator::generateMemCell(float x, float y,int adr,QString signal,int value){
             int decId=this->id++;
             int conId=this->id++;
             int decToCon=1;
 
             QJsonObject constant = makeConstant(x,y,2,conId,true,QJsonArray{makeFilter(signal,value,1)});
-            constant["connections"]=QJsonArray{makeRedConnections(decToCon,QVector<int>{decId})};
-            QJsonObject decider = makeDecider(x+1.5,y,2,decId,"=",adr,true,"signal-T",signal);
-            QJsonArray connections;
-            connections.append(makeGreenConnections(1,QVector<int>{lastPole}));
-            connections.append(makeGreenConnections(1,QVector<int>{decId}));
+            constant["connections"]=QJsonObject{{"1",makeGreenConnections(decToCon,QVector<int>{decId})}};
+            QJsonObject decider = makeDecider(x+1.5,y,2,decId,"=",adr,true,"signal-T","signal-everything");
+            QJsonObject connections;
+            connections["1"]=(makeRedConnections(1,QVector<int>{lastPole}));
+            connections["2"]=(makeGreenConnections(1,QVector<int>{lastPole}));
+
 
             decider["connections"]=connections;
             entities.append(constant);
             entities.append(decider);
+            return decId;
         }
 
         //Trying to map some Midi instruments to almost fitting factorio sounds
@@ -325,6 +320,8 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
             this->usedSignals.clear();
             int noteCount=0;
             int track = 0;
+
+
             for (int i=0; i<midifile[track].size(); i++){
                 if(midifile[track][i].isNoteOn())
                     noteCount++;
@@ -337,7 +334,7 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
 
             int drumChannel=-1;
             if(drumkit){
-                drumChannel = 9; //GM1 Midi Standard, Channel 9 is Drumkit
+                drumChannel = 9; //GM1 Midi Standard, Channel 10 is Drumkit
             }
 
             QVector<QVector<QString>> channelSignals;
@@ -346,8 +343,6 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
 
             generateClock(0.0,lastY,numTicks);
             int firstPoleId=lastConPoint;
-
-
 
             for (int i=0; i<midifile[track].size(); i++) { // Main Loop
                 MidiEvent note = midifile[track][i];
@@ -361,7 +356,7 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
                     continue;
 
                 int tick = 2 + midifile.getTimeInSeconds(track,i)*60; //60 ticks per second
-
+                //int prevPole=lastPole;
                 //Prepare next row
                 if(++lastY >= cellsPerRow){
                     lastY=0;
@@ -370,17 +365,15 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
 
                     //make top pole
                     int poleId=this->id++;
-                    QJsonObject poleObj = makePole(lastX+3,lastY,poleId,makeGreenConnections(1,QVector<int>{lastPole,lastConPoint}));
+                    entities.append(makePole(lastX+3,lastY,poleId,makeConnections(1,QVector<int>{lastPole,lastConPoint},QVector<int>{lastPole,lastConPoint})));
                     lastPole=poleId;
                     lastConPoint=poleId;
-                    entities.append(poleObj);
                 }
 
                 if(++poleCount % 4 == 0){//make Pole
                     int poleId=this->id++;
-                    QJsonObject poleObj = makePole(lastX+3,lastY,poleId,makeGreenConnections(1,QVector<int>{lastPole}));
+                    entities.append(makePole(lastX+3,lastY,poleId,makeConnections(1,QVector<int>{lastPole},QVector<int>{lastPole})));
                     lastPole=poleId;
-                    entities.append(poleObj);
                 }
                 QString signalName="signal-A";
                 int chanId=0;
@@ -413,8 +406,13 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
                 if(channelSignals[chanId].length()>channelData[chanId][1]){
                     signalName=channelSignals[chanId][channelData[chanId][1]];
                     generateMemCell(lastX,lastY,tick,signalName,noteId);
+
+                    //idsToNextPole.append(decId);
+
+
                     channelData[chanId][0]=tick;
                 }
+
                 this->mw->setProgress(i);
             }
 
@@ -423,13 +421,15 @@ QJsonObject FactorioGenerator::makeDecider(float x, float y,int dir, int id, QSt
             QMapIterator<QString, QPair<int,float>> i(usedSignals);
             lastConPoint=firstPoleId;
             float speakerX=4.0;
+            int lampId=this->id++;
+            entities.append(makeLamp(speakerX-2,-2.0,lampId,"signal-T",makeGreenConnections(1,QVector<int>{lastConPoint})));
             while (i.hasNext()) {
                 i.next();
                 int speakerId=this->id++;
-                int lampId=this->id++;
+                lampId=this->id++;
                 QJsonObject lamp = makeLamp(speakerX,-2.0,lampId,i.key(),makeGreenConnections(1,QVector<int>{lastConPoint}));
                 QJsonObject speaker = makeSpeaker(speakerX++,-1.0,speakerId,i.value().first,i.key(),i.value().second);
-                speaker["connections"]=QJsonArray{makeGreenConnections(1,QVector<int>{lastConPoint})};
+                speaker["connections"]=QJsonObject{{"1",makeGreenConnections(1,QVector<int>{lastConPoint})}};
                 lastConPoint=speakerId;
                 entities.append(speaker);
                 entities.append(lamp);
