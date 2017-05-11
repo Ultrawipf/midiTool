@@ -30,11 +30,7 @@ QJsonObject FactorioGenerator::makeConnections(int cID, QVector<int> red_eIDs,QV
         redConns.append(QJsonObject{{"entity_id",red_eIDs[i]},{"circuit_id",cID}});
     for(int i=0;i<green_eIDs.length();i++)
         greenConns.append(QJsonObject{{"entity_id",green_eIDs[i]},{"circuit_id",cID}});
-
-    QJsonObject conns;
-    conns["red"]=redConns;
-    conns["green"]=greenConns;
-    return conns;
+    return QJsonObject{{"red", redConns}, {"green", greenConns}};
 }
 QJsonObject FactorioGenerator::makeRedConnections(int cID, QVector<int> red_eIDs){
     return makeConnections(cID, red_eIDs, QVector<int>{});
