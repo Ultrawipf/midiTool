@@ -38,8 +38,9 @@ void MainWindow::on_openFileButton_clicked()
     }
     midifile.linkNotePairs();
     midifile.doTimeAnalysis();
-    midifile.sortTracks();
+
     midifile.joinTracks();
+    midifile.sortTracks();
     this->processFile();
 }
 

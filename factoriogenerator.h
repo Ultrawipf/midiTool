@@ -33,7 +33,9 @@ private:
     QJsonObject makeSpeaker(float x, float y, int id, int instId, QString signalName, float vol);
     int drumToFacId(int note);
 
-    int generateMemCell(float x, float y, int adr, QString signal, int value); //returns decider id
+
+    void appendMemCells(QVector<QPair<QString,int>> currentSignals, int signalsPerRow, int tick);
+    int generateMemCell(float x, float y, int adr, QVector<QPair<QString, int> > currentSignal); //returns decider id
     void generateClock(float x, float y, int val);
 
 
@@ -42,9 +44,11 @@ private:
     int lastConPoint=0;
     int lastX=0;
     int lastY=0;
+    int poleCount=0;
     QVector<QPair<QString,int>> currentNotes;
     QVector<QString> signalNames={"signal-A","signal-B","signal-C","signal-D","signal-E","signal-F","signal-G","signal-H","signal-I","signal-J","signal-K","signal-L","signal-M","signal-N","signal-O","signal-P","signal-Q","signal-R","signal-S","signal-U","signal-V","signal-W","signal-X","signal-Y","signal-Z","signal-0","signal-1","signal-2","signal-3","signal-4","signal-5","signal-6","signal-7","signal-8","signal-9"};
     QMap<QString,QPair<int,float>> usedSignals; //instrument and volume
+
 
     QJsonObject genMemCell(int x, int y);
     QJsonObject blueprint;

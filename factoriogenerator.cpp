@@ -221,12 +221,16 @@ void FactorioGenerator::generateClock(float x, float y,int val){
     entities.append(pole);
 }
 
-int FactorioGenerator::generateMemCell(float x, float y,int adr,QString signal,int value){
+int FactorioGenerator::generateMemCell(float x, float y,int adr,QVector<QPair<QString,int>> currentSignal){
     int decId=this->id++;
     int conId=this->id++;
     int decToCon=1;
-
-    QJsonObject constant = makeConstant(x,y,2,conId,true,QJsonArray{makeFilter(signal,value,1)});
+    int count=1;
+    QJsonArray filters;
+    for(QPair<QString,int>& sig : currentSignal){
+        filters.append(makeFilter(sig.first,sig.second,count++));
+    }
+    QJsonObject constant = makeConstant(x,y,2,conId,true,filters);
     constant["connections"]=QJsonObject{{"1",makeGreenConnections(decToCon,QVector<int>{decId})}};
     QJsonObject decider = makeDecider(x+1.5,y,2,decId,"=",adr,true,"signal-T","signal-everything");
     QJsonObject connections;
@@ -289,51 +293,10 @@ int FactorioGenerator::drumToFacId(int note){
     }
 }
 
-
-QString FactorioGenerator::midiToBlueprint(MidiFile &midifile,bool drumkit){
-    //Max 112, Lowest 41
-    this->usedSignals.clear();
-    int noteCount=0;
-    int track = 0;
-
-
-    for (int i=0; i<midifile[track].size(); i++){
-        if(midifile[track][i].isNoteOn())
-            noteCount++;
-
-    }
-    int cellsPerRow = std::sqrt(noteCount)*2;
-    int poleCount=0;
-
-    int numTicks = midifile.getTotalTimeInSeconds() * 60;
-
-    int drumChannel=-1;
-    if(drumkit){
-        drumChannel = 9; //GM1 Midi Standard, Channel 10 is Drumkit
-    }
-
-    QVector<QVector<QString>> channelSignals;
-    QVector<QVector<int>> channelData{{0,0,2},{0,0,1}};//first: last Tick, second: parallel notes this tick, third: instrument number. initialize with drumkit and piano
-
-
-    generateClock(0.0,lastY,numTicks);
-    int firstPoleId=lastConPoint;
-
-    for (int i=0; i<midifile[track].size(); i++) { // Main Loop
-        MidiEvent note = midifile[track][i];
-        if(midifile[track][i].isNoteOff()){
-            continue;
-        }
-        if (!midifile[track][i].isNoteOn()) {
-            continue;
-        }
-        if((note.getKeyNumber()>112 || note.getKeyNumber()<41) && note.getChannel() != drumChannel) //out of range?
-            continue;
-
-        int tick = 2 + midifile.getTimeInSeconds(track,i)*60; //60 ticks per second
-        //int prevPole=lastPole;
-        //Prepare next row
-        if(++lastY >= cellsPerRow){
+//Generate memory cells for all signals in Vector
+void FactorioGenerator::appendMemCells(QVector<QPair<QString,int>> currentSignals,int signalsPerRow,int tick){
+    while(!currentSignals.empty()){
+        if(++lastY >= signalsPerRow){
             lastY=0;
             lastX+=4;
             poleCount=0;
@@ -350,7 +313,63 @@ QString FactorioGenerator::midiToBlueprint(MidiFile &midifile,bool drumkit){
             entities.append(makePole(lastX+3,lastY,poleId,makeConnections(1,QVector<int>{lastPole},QVector<int>{lastPole})));
             lastPole=poleId;
         }
-        QString signalName="signal-A";
+
+        QVector<QPair<QString,int>> ts;
+        for(int i=0;i<18 && !currentSignals.empty();i++){
+            ts.append(currentSignals.front());
+            currentSignals.pop_front();
+        }
+        generateMemCell(this->lastX,this->lastY,tick,ts);
+    }
+}
+
+QString FactorioGenerator::midiToBlueprint(MidiFile &midifile,bool drumkit){
+    //Max 112, Lowest 41
+    this->usedSignals.clear();
+    int noteCount=0;
+    int track = 0;
+
+    int lastTick=0;
+    for (int i=0; i<midifile[track].size(); i++){
+        int tick=midifile[track][i].tick;
+        if(midifile[track][i].isNoteOn() && midifile[track][i].tick != lastTick){
+            noteCount++;
+            lastTick=tick;
+        }
+
+    }
+    int cellsPerRow = std::sqrt(noteCount)*2;
+
+
+    int numTicks = midifile.getTotalTimeInSeconds() * 60;
+
+    int drumChannel=-1;
+    if(drumkit){
+        drumChannel = 9; //GM1 Midi Standard, Channel 10 is Drumkit
+    }
+
+    QVector<QVector<QString>> channelSignals;
+
+    QVector<QVector<QPair<QString,int>>> currentChanSignals;
+    QVector<QVector<int>> channelData{{0,0,2},{0,0,1}};//first: last Tick, second: parallel notes this tick, third: instrument number. initialize with drumkit and piano
+
+
+    generateClock(0.0,lastY,numTicks);
+    int firstPoleId=lastConPoint;
+    int tick=0;
+    for (int i=0; i<midifile[track].size(); i++) { // Main Loop
+        MidiEvent note = midifile[track][i];
+        if(midifile[track][i].isNoteOff()){
+            continue;
+        }
+        if (!midifile[track][i].isNoteOn()) {
+            continue;
+        }
+        if((note.getKeyNumber()>112 || note.getKeyNumber()<41) && note.getChannel() != drumChannel) //out of range?
+            continue;
+
+        tick = 2 + midifile.getTimeInSeconds(track,i)*60; //60 ticks per second
+
         int chanId=0;
         int noteId=note.getKeyNumber()-40;
         if(note.getChannel()==drumChannel){//drumkit
@@ -369,23 +388,40 @@ QString FactorioGenerator::midiToBlueprint(MidiFile &midifile,bool drumkit){
                 channelData[chanId][1]=0;//no more notes this tick
         }
 
-        while(channelSignals.length()<=chanId)
+        while(channelSignals.length()<=chanId){
             channelSignals.push_back(QVector<QString>(0));
+            currentChanSignals.push_back(QVector<QPair<QString,int>>());
+        }
         if(channelData[chanId][1]>=channelSignals[chanId].length()){//we need more speakers, allocate new signal
             channelSignals[chanId].push_back(signalNames.first());
             signalNames.pop_front(); //Remove used signal from available signal list
             //Insert signal with instrument and volume into signal map to generate speakers later
             usedSignals[channelSignals[chanId][channelData[chanId][1]]]=QPair<int,float>(channelData[chanId][2],chanId==1?0.5:1.0); //signalname,instrument id, volume (1.0 for piano, 0.5 for drums)
         }
+        //Generate mem cells per channel and empty signal list
+        if(tick!=channelData[chanId][0]){
+            if(!currentChanSignals[chanId].empty()){
+                appendMemCells(currentChanSignals[chanId],cellsPerRow,channelData[chanId][0]); //write memory cells
+                currentChanSignals[chanId].clear();
+            }
+        }
 
         if(channelSignals[chanId].length()>channelData[chanId][1]){
-            signalName=channelSignals[chanId][channelData[chanId][1]];
-            generateMemCell(lastX,lastY,tick,signalName,noteId);
+            currentChanSignals[chanId].append(QPair<QString,int>(channelSignals[chanId][channelData[chanId][1]],noteId));
+            lastTick=tick;
             channelData[chanId][0]=tick;
         }
 
+
+
+
         this->mw->setProgress(i);
     }
+    for(int i=0;i<currentChanSignals.length();i++)
+        if(!currentChanSignals[i].empty()){//last notes
+            appendMemCells(currentChanSignals[i],cellsPerRow,lastTick);
+            currentChanSignals[i].clear();
+        }
 
     //Main generation finished
     //make Speakers
